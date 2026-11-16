@@ -1,5 +1,7 @@
 # Raingutter Regatta Bracket
 
+https://mstratman.github.io/raingutter
+
 Offline-first, mobile-friendly bracket tracker for Cub Scout raingutter regattas. No build, no dependencies.
 
 - Single elimination; each match = **two heats with lanes swapped** (so every scout races both lanes), 1–1 split → tiebreaker heat.
