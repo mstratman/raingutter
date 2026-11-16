@@ -1,0 +1,15 @@
+{
+  "name": "Raingutter Regatta Bracket",
+  "short_name": "Regatta",
+  "description": "Offline bracket tracker for Cub Scout raingutter regattas",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b5fa5",
+  "theme_color": "#0b5fa5",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
