@@ -166,17 +166,18 @@
     try { localStorage.setItem('rgr:v1:opts', JSON.stringify({ swap: ui.swap, format: ui.format, k: ui.k, adv: ui.adv })); } catch (x) {}
   }
   function estimateHtml(n) {
-    if (n < 2) return '<p class="small" style="margin:8px 0 0"><b>Heats:</b> add at least 2 scouts to see an estimate.</p>';
+    if (n < 2) return '<div class="heatbox"><div class="hb-num">–</div><div class="hb-txt"><b>Estimated heats</b><span>Add at least 2 scouts to see an estimate.</span></div></div>';
     var pool = effFormat(n) === 'pool', po = poolOpts(n);
-    var e = L.estimateHeats(n, pool ? { swap: ui.swap, format: 'pool', k: po.k, advance: po.adv } : { swap: ui.swap }), t;
-    var typ = e.typLow === e.typHigh ? '<b>' + e.typLow + '</b>' : '<b>' + e.typLow + '–' + e.typHigh + '</b>';
+    var e = L.estimateHeats(n, pool ? { swap: ui.swap, format: 'pool', k: po.k, advance: po.adv } : { swap: ui.swap }), d = [];
+    var num = e.typLow === e.typHigh ? '' + e.typLow : e.typLow + '–' + e.typHigh;
     if (pool) {
       var bl = e.typLow - e.poolHeats, bh = e.typHigh - e.poolHeats;
-      t = typ + ' heats total: ' + e.poolHeats + ' pool heats + ' + (bl === bh ? bl : bl + '–' + bh) + ' bracket heats (' + po.adv + ' scouts)';
-      if (e.min !== e.max) t += '; ' + e.min + ' minimum, ' + e.max + ' if every bracket match needs a tiebreaker';
-    } else if (!ui.swap) t = typ + ' heats total (' + e.matches + ' matches × 1 heat)';
-    else t = typ + ' heats typical (' + e.min + ' minimum, ' + e.max + ' if every match needs a tiebreaker)';
-    return '<p class="small" style="margin:8px 0 0"><b>Heats:</b> ' + t + '. Every scout races at least ' + e.perScoutMin + ' heat' + (e.perScoutMin === 1 ? '' : 's') + '.</p>';
+      d.push(e.poolHeats + ' pool heats + ' + (bl === bh ? bl : bl + '–' + bh) + ' bracket heats (' + po.adv + ' scouts)');
+    } else if (ui.swap) d.push(e.matches + ' matches × 2 heats, plus tiebreakers');
+    else d.push(e.matches + ' matches × 1 heat');
+    if (e.min !== e.max) d.push(e.min + ' minimum, ' + e.max + ' if every match needs a tiebreaker');
+    d.push('every scout races at least ' + e.perScoutMin + ' heat' + (e.perScoutMin === 1 ? '' : 's'));
+    return '<div class="heatbox"><div class="hb-num">' + num + '</div><div class="hb-txt"><b>Estimated heats</b><span>' + d.join('<br>') + '</span></div></div>';
   }
 
   // --- Pool play ---
