@@ -92,11 +92,11 @@ td.n, th.n { text-align: center; }
 .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 20; display: flex; align-items: flex-end; justify-content: center; }
 .sheet { background: var(--bg); width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; border-radius: 18px 18px 0 0;
   padding: 16px 16px calc(env(safe-area-inset-bottom) + 16px); }
-.sheet .heat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px; margin-top: 10px; }
-.sheet .heat .vs { margin-top: 8px; }
-.sheet .opt { border: 2px solid var(--line); background: var(--card); color: var(--ink); border-radius: 10px; padding: 10px 6px; font-weight: 700; font-size: 15px; min-height: 56px; word-break: break-word; }
-.sheet .opt.sel { background: var(--win-bg); border-color: var(--good); }
-.sheet .opt small { display: block; font-weight: 600; opacity: .8; }
+.sheet .heat, .heats .heat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px; margin-top: 10px; }
+.sheet .heat .vs, .heats .heat .vs { margin-top: 8px; }
+.sheet .opt, .heats .opt { border: 2px solid var(--line); background: var(--card); color: var(--ink); border-radius: 10px; padding: 10px 6px; font-weight: 700; font-size: 15px; min-height: 56px; word-break: break-word; }
+.sheet .opt.sel, .heats .opt.sel { background: var(--win-bg); border-color: var(--good); }
+.sheet .opt small, .heats .opt small { display: block; font-weight: 600; opacity: .8; }
 .toast { position: fixed; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom) + 70px); z-index: 30; background: #14202e; color: #fff;
   border-radius: 12px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; max-width: 600px; margin: 0 auto; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
 .toast button { background: #fff; color: #14202e; border: 0; border-radius: 8px; padding: 8px 14px; font-weight: 800; }
@@ -104,3 +104,7 @@ td.n, th.n { text-align: center; }
 
 .check { display: flex; align-items: center; gap: 10px; font-size: 16px; min-height: 44px; }
 .check input { width: 22px; height: 22px; flex: none; }
+tr.cut td { border-bottom: 3px solid var(--good); }
+.sel-select { font-size: 16px; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+.opts { display: flex; flex-wrap: wrap; gap: 12px 20px; margin: 8px 0 0; align-items: center; }
+.opts label { display: flex; align-items: center; gap: 8px; font-size: 15px; }

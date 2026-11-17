@@ -81,23 +81,23 @@
   function laneChip(n) { return '<span class="lane l' + n + '">Lane ' + n + '</span>'; }
   function logEvent(ev, type, data) { ev.log.push(Object.assign({ t: Date.now(), type: type }, data || {})); }
 
-  var ui = { tab: 'race', sheet: null, toast: null, draft: '', title: '', swap: true };
+  var ui = { tab: 'race', sheet: null, toast: null, draft: '', title: '', swap: true, format: 'bracket', k: 3, adv: null, poolEdit: false };
   var toastTimer = null;
 
   // ---------- Render ----------
   function render() {
     var ev = root.current;
-    var started = ev && ev.bracket;
+    var started = ev && ev.bracket, inPool = ev && ev.pool && !ev.bracket, running = started || inPool;
     var tab = ui.tab;
     var html = '<header class="top"><h1 id="ttl">' + esc(ev ? ev.title : 'Raingutter Regatta') + '</h1><span class="save" id="save"></span></header>';
     html += '<div id="banner"></div>';
     html += '<main class="' + (tab === 'bracket' && started ? 'wide' : '') + '">';
-    if (tab === 'race') html += started ? viewRace(ev) : viewSetup(ev);
-    else if (tab === 'bracket') html += started ? viewBracket(ev) : '<div class="card muted">Start the bracket first (Race tab).</div>';
+    if (tab === 'race') html += started ? viewRace(ev) : inPool ? viewPool(ev) : viewSetup(ev);
+    else if (tab === 'bracket') html += started ? viewBracket(ev) : inPool ? '<div class="card muted">The bracket starts after pool play is finished (top ' + ev.pool.advance + ' advance). Go to the Race tab.</div>' : '<div class="card muted">Start the bracket first (Race tab).</div>';
     else if (tab === 'scouts') html += ev ? viewScouts(ev) : '<div class="card muted">No event yet.</div>';
     else html += viewMore(ev);
     html += '</main>';
-    html += '<nav class="tabs">' + [['race', '🏁', started ? 'Race' : 'Setup'], ['bracket', '🗂️', 'Bracket'], ['scouts', '👦', 'Scouts'], ['more', '⚙️', 'More']]
+    html += '<nav class="tabs">' + [['race', '🏁', running ? 'Race' : 'Setup'], ['bracket', '🗂️', 'Bracket'], ['scouts', '👦', 'Scouts'], ['more', '⚙️', 'More']]
       .map(function (t) { return '<button data-act="tab" data-tab="' + t[0] + '" class="' + (tab === t[0] ? 'on' : '') + '"><span class="ic">' + t[1] + '</span>' + t[2] + '</button>'; }).join('') + '</nav>';
     if (ui.sheet && ev && ev.bracket) html += viewSheet(ev);
     if (ui.toast) html += '<div class="toast"><span>' + esc(ui.toast.text) + '</span><button data-act="undo">Undo</button></div>';
@@ -133,23 +133,104 @@
       }).join('') + '</ul>';
     }
     h += '</div>';
+    var n = scouts.length, pool = effFormat(n) === 'pool', po = poolOpts(n);
     h += '<div class="card"><h2>Format</h2>' +
-      '<label class="check"><input type="checkbox" id="swap" ' + (ui.swap ? 'checked' : '') + '> <span>Swap lanes (two heats per match)</span></label>' +
-      '<p class="small muted" style="margin:6px 0 0">' + (ui.swap
-        ? 'Single elimination. Each match is <b>two heats with lanes swapped</b>, so every scout races both lanes every match. Most heat wins advances; a 1–1 split gets a tiebreaker heat. Scouts without a partner in round 1 get a bye and still race both lanes in round 2.'
-        : 'Single elimination. Each match is <b>one heat</b>; the winner advances. Scouts are <b>not</b> guaranteed to race both lanes, and nobody is guaranteed more than one heat.') + '</p>' +
-      estimateHtml(scouts.length) + '</div>';
-    h += '<button class="btn primary block" data-act="start" ' + (scouts.length < 2 ? 'disabled' : '') + '>Start bracket with ' + scouts.length + ' scouts</button>';
+      '<label class="check"><input type="radio" name="fmt" value="bracket" ' + (!pool ? 'checked' : '') + '> <span>Single elimination</span></label>' +
+      '<label class="check"><input type="radio" name="fmt" value="pool" ' + (pool ? 'checked' : '') + (n < 3 ? ' disabled' : '') + '> <span>Pool play, then bracket' + (n < 3 ? ' <span class="muted small">(needs 3+ scouts)</span>' : '') + '</span></label>';
+    if (pool) {
+      h += '<div class="opts"><label>Heats per scout <select class="sel-select" id="k">' + range(2, Math.min(8, n - 1)).map(function (v) { return '<option' + (v === po.k ? ' selected' : '') + '>' + v + '</option>'; }).join('') + '</select></label>' +
+        '<label>Top <select class="sel-select" id="adv">' + advOptions(n).map(function (v) { return '<option' + (v === po.adv ? ' selected' : '') + '>' + v + '</option>'; }).join('') + '</select> advance</label></div>';
+    }
+    h += '<label class="check"><input type="checkbox" id="swap" ' + (ui.swap ? 'checked' : '') + '> <span>' + (pool ? 'Swap lanes in the bracket (two heats per match)' : 'Swap lanes (two heats per match)') + '</span></label>';
+    h += '<p class="small muted" style="margin:6px 0 0">' + (pool
+        ? 'Every scout races <b>' + po.k + ' heats against ' + po.k + ' different opponents</b>, with lanes balanced (about half in each lane). The top ' + po.adv + ' by heat wins advance to a single-elimination bracket; ties are broken by head-to-head, then a random draw. '
+        : 'Single elimination. ') +
+      (ui.swap
+        ? (pool ? 'In the bracket, each' : 'Each') + ' match is <b>two heats with lanes swapped</b>, so every scout races both lanes every match. Most heat wins advances; a 1–1 split gets a tiebreaker heat.' + (pool ? '' : ' Scouts without a partner in round 1 get a bye and still race both lanes in round 2.')
+        : (pool ? 'In the bracket, each' : 'Each') + ' match is <b>one heat</b>; the winner advances.' + (pool ? '' : ' Scouts are <b>not</b> guaranteed to race both lanes, and nobody is guaranteed more than one heat.')) + '</p>' +
+      estimateHtml(n) + '</div>';
+    h += '<button class="btn primary block" data-act="start" ' + (scouts.length < 2 ? 'disabled' : '') + '>Start ' + (pool ? 'pool play' : 'bracket') + ' with ' + scouts.length + ' scouts</button>';
     if (scouts.length < 2) h += '<p class="hint muted small">Add at least 2 scouts.</p>';
     return h;
   }
 
+  function range(a, b) { var r = []; for (var i = a; i <= b; i++) r.push(i); return r; }
+  function effFormat(n) { return ui.format === 'pool' && n >= 3 ? 'pool' : 'bracket'; }
+  function advOptions(n) { var o = [], m = 2; while (m <= n) { o.push(m); m *= 2; } return o; }
+  function defaultAdv(n) { return n >= 4 ? 4 : 2; }
+  function poolOpts(n) {
+    var k = Math.max(2, Math.min(ui.k || 3, Math.max(2, n - 1))), advs = advOptions(n);
+    return { k: k, adv: ui.adv && advs.indexOf(ui.adv) >= 0 ? ui.adv : defaultAdv(n) };
+  }
+  function saveOpts() {
+    try { localStorage.setItem('rgr:v1:opts', JSON.stringify({ swap: ui.swap, format: ui.format, k: ui.k, adv: ui.adv })); } catch (x) {}
+  }
   function estimateHtml(n) {
     if (n < 2) return '<p class="small" style="margin:8px 0 0"><b>Heats:</b> add at least 2 scouts to see an estimate.</p>';
-    var e = L.estimateHeats(n, { swap: ui.swap }), t;
-    if (!ui.swap) t = '<b>' + e.min + '</b> heats total (' + e.matches + ' matches × 1 heat)';
-    else t = '<b>' + e.typLow + '–' + e.typHigh + '</b> heats typical (' + e.min + ' minimum, ' + e.max + ' if every match needs a tiebreaker)';
+    var pool = effFormat(n) === 'pool', po = poolOpts(n);
+    var e = L.estimateHeats(n, pool ? { swap: ui.swap, format: 'pool', k: po.k, advance: po.adv } : { swap: ui.swap }), t;
+    var typ = e.typLow === e.typHigh ? '<b>' + e.typLow + '</b>' : '<b>' + e.typLow + '–' + e.typHigh + '</b>';
+    if (pool) {
+      var bl = e.typLow - e.poolHeats, bh = e.typHigh - e.poolHeats;
+      t = typ + ' heats total: ' + e.poolHeats + ' pool heats + ' + (bl === bh ? bl : bl + '–' + bh) + ' bracket heats (' + po.adv + ' scouts)';
+      if (e.min !== e.max) t += '; ' + e.min + ' minimum, ' + e.max + ' if every bracket match needs a tiebreaker';
+    } else if (!ui.swap) t = typ + ' heats total (' + e.matches + ' matches × 1 heat)';
+    else t = typ + ' heats typical (' + e.min + ' minimum, ' + e.max + ' if every match needs a tiebreaker)';
     return '<p class="small" style="margin:8px 0 0"><b>Heats:</b> ' + t + '. Every scout races at least ' + e.perScoutMin + ' heat' + (e.perScoutMin === 1 ? '' : 's') + '.</p>';
+  }
+
+  // --- Pool play ---
+  function poolStandingsCard(ev) {
+    var pool = ev.pool, rows = L.poolStandings(pool), prev = null;
+    var h = '<div class="card"><h2>Pool standings</h2><table><tr><th class="n">#</th><th>Scout</th><th class="n">W–L</th><th class="n">L1</th><th class="n">L2</th></tr>';
+    rows.forEach(function (r, i) {
+      var tag = prev && prev.by !== 'wins' ? ' <span class="muted small">(' + (prev.by === 'h2h' ? 'head-to-head' : 'draw') + ')</span>' : '';
+      h += '<tr class="' + (i + 1 === pool.advance && i + 1 < rows.length ? 'cut' : '') + '"><td class="n">' + r.rank + '</td><td><b>' + esc(nameOf(ev, r.id)) + '</b>' + tag + '</td><td class="n">' + r.w + '–' + r.l + '</td><td class="n">' + r.lane1 + '</td><td class="n">' + r.lane2 + '</td></tr>';
+      prev = r;
+    });
+    h += '</table><p class="muted small" style="margin:8px 0 0">Top ' + pool.advance + ' advance (green line). Ties: wins among the tied scouts, then a random draw made at the start. L1/L2 = pool heats raced in each lane.</p></div>';
+    return h;
+  }
+
+  function poolEditCard(ev) {
+    var pool = ev.pool;
+    var h = '<div class="card"><h2>Pool heats</h2><button class="btn block" data-act="togglePoolEdit">' + (ui.poolEdit ? 'Hide heats' : 'View / correct pool heats') + '</button>';
+    if (ui.poolEdit) {
+      h += '<div class="heats">' + pool.heats.map(function (ht, n) {
+        var w = ht.w && ht.w.w;
+        return '<div class="heat"><div class="row between"><b>Heat ' + (n + 1) + '</b>' + (w ? '<button class="btn sm danger" data-act="poolClear" data-n="' + n + '">Clear result</button>' : '<span class="muted small">not run yet</span>') + '</div>' +
+          '<div class="vs">' + [ht.a, ht.b].map(function (id, idx) {
+            return '<button class="opt ' + (w === id ? 'sel' : '') + '" data-act="poolSet" data-n="' + n + '" data-w="' + id + '"><small>' + laneChip(idx + 1) + '</small>' + esc(nameOf(ev, id)) + (w === id ? ' ✓' : '') + '</button>';
+          }).join('') + '</div></div>';
+      }).join('') + '</div>';
+    }
+    return h + '</div>';
+  }
+
+  function viewPool(ev) {
+    var pool = ev.pool, q = L.poolQueue(pool), total = pool.heats.length, done = total - q.length, h = '';
+    if (q.length) {
+      var n = q[0], ht = pool.heats[n];
+      h += '<div class="card"><div class="next-label"><div><b>Pool play</b></div><span class="chip">Heat ' + (done + 1) + ' of ' + total + '</span></div>';
+      h += '<div class="vs">' + [ht.a, ht.b].map(function (id, idx) {
+        return '<button class="pick l' + (idx + 1) + '" data-act="poolWin" data-n="' + n + '" data-w="' + id + '"><small class="lane l' + (idx + 1) + '">Lane ' + (idx + 1) + '</small>' + esc(nameOf(ev, id)) + '</button>';
+      }).join('') + '</div>';
+      h += '<p class="hint muted small">Tap the scout whose boat <b>won</b> this heat. Top ' + pool.advance + ' advance to the bracket.</p></div>';
+      if (q.length > 1) {
+        h += '<div class="card upnext"><h2>Coming up</h2><ul class="list">' + q.slice(1, 8).map(function (x, i) {
+          var hh = pool.heats[x];
+          return '<li><span><b>' + esc(nameOf(ev, hh.a)) + '</b> ' + laneChip(1) + ' vs ' + laneChip(2) + ' <b>' + esc(nameOf(ev, hh.b)) + '</b></span><span class="muted small">Heat ' + (done + 2 + i) + '</span></li>';
+        }).join('') + '</ul>' + (q.length > 8 ? '<p class="muted small" style="margin:6px 0 0">+ ' + (q.length - 8) + ' more heats</p>' : '') + '</div>';
+      }
+      h += poolStandingsCard(ev);
+    } else {
+      var rows = L.poolStandings(pool), M = pool.advance, cut = rows[M - 1], below = rows[M];
+      h += '<div class="card"><h2>Pool play complete</h2><p class="small" style="margin-top:0">All ' + total + ' heats are done. Check the standings, then start the bracket with the top ' + M + '.</p>';
+      if (below && cut.by !== 'wins') h += '<p class="small"><b class="warn">Cut line:</b> ' + esc(nameOf(ev, cut.id)) + ' (#' + M + ') and ' + esc(nameOf(ev, below.id)) + ' (#' + (M + 1) + ') are tied on heat wins; ' + esc(nameOf(ev, cut.id)) + ' advances by ' + (cut.by === 'h2h' ? 'head-to-head' : 'the random draw') + '. Correct any heat below if needed.</p>';
+      h += '<button class="btn primary block" data-act="startBracket">Start bracket with top ' + M + '</button></div>';
+      h += poolStandingsCard(ev);
+    }
+    return h + poolEditCard(ev);
   }
 
   // --- Race ---
@@ -213,16 +294,21 @@
 
   // --- Scouts ---
   function viewScouts(ev) {
-    if (!ev.bracket) return viewSetup(ev);
-    var st = L.stats(ev), arr = Object.keys(st).map(function (k) { return st[k]; });
-    var order = { Champion: 0, Active: 1, Out: 2 };
-    arr.sort(function (a, b) { return order[a.status] - order[b.status] || b.hw - a.hw || a.name.localeCompare(b.name); });
-    var h = '<div class="card"><h2>Standings</h2><table><tr><th>Scout</th><th class="n">W–L</th><th class="n">L1</th><th class="n">L2</th><th>Status</th></tr>';
-    arr.forEach(function (s) {
-      var status = s.status === 'Out' ? 'Out · ' + s.outRound : s.status + (s.bye && s.status === 'Active' ? '' : '');
-      h += '<tr><td><b>' + esc(s.name) + '</b>' + (s.bye ? ' <span class="muted small">(bye R1)</span>' : '') + '</td><td class="n">' + s.hw + '–' + s.hl + '</td><td class="n">' + s.lane1 + '</td><td class="n">' + s.lane2 + '</td><td class="st-' + s.status + '">' + status + '</td></tr>';
-    });
-    h += '</table><p class="muted small" style="margin:8px 0 0">W–L = heats won–lost. L1/L2 = heats raced in each lane.</p></div>';
+    if (!ev.bracket && !ev.pool) return viewSetup(ev);
+    var h = '';
+    if (ev.pool) h += poolStandingsCard(ev);
+    if (ev.bracket) {
+      var st = L.stats(ev), arr = Object.keys(st).map(function (k) { return st[k]; });
+      var order = { Champion: 0, Active: 1, Out: 2 };
+      arr.sort(function (a, b) { return order[a.status] - order[b.status] || b.hw - a.hw || a.name.localeCompare(b.name); });
+      h += '<div class="card"><h2>' + (ev.pool ? 'Overall' : 'Standings') + '</h2><table><tr><th>Scout</th><th class="n">W–L</th><th class="n">L1</th><th class="n">L2</th><th>Status</th></tr>';
+      arr.forEach(function (s) {
+        var status = s.status === 'Out' ? 'Out · ' + s.outRound : s.status;
+        h += '<tr><td><b>' + esc(s.name) + '</b>' + (s.bye ? ' <span class="muted small">(bye R1)</span>' : '') + '</td><td class="n">' + s.hw + '–' + s.hl + '</td><td class="n">' + s.lane1 + '</td><td class="n">' + s.lane2 + '</td><td class="st-' + s.status + '">' + status + '</td></tr>';
+      });
+      h += '</table><p class="muted small" style="margin:8px 0 0">W–L = heats won–lost' + (ev.pool ? ' (pool and bracket)' : '') + '. L1/L2 = heats raced in each lane.</p></div>';
+    }
+    if (ev.pool) h += poolEditCard(ev);
     h += '<div class="card"><h2>Fix a name</h2><ul class="list">' + ev.scouts.map(function (s) {
       return '<li><span>' + esc(s.name) + '</span><button class="btn sm" data-act="rename" data-id="' + s.id + '">Edit</button></li>';
     }).join('') + '</ul></div>';
@@ -239,7 +325,7 @@
       '<button class="btn block" data-act="copy">Copy all data to clipboard</button>' +
       '<button class="btn block" data-act="import">Import data file…</button>' +
       '<input type="file" id="file" accept="application/json,.json" style="display:none"></div>';
-    if (ev && ev.bracket) h += '<div class="card"><h2>Results summary</h2><button class="btn block" data-act="summary">Copy results as text</button></div>';
+    if (ev && (ev.bracket || ev.pool)) h += '<div class="card"><h2>Results summary</h2><button class="btn block" data-act="summary">Copy results as text</button></div>';
     h += '<div class="card"><h2>Events</h2>';
     if (ev) h += '<p class="small" style="margin-top:0">Current: <b>' + esc(ev.title) + '</b></p><button class="btn block" data-act="newEvent">Start a new event (saves this one)</button>';
     else h += '<p class="small muted" style="margin-top:0">No current event.</p>';
@@ -290,6 +376,17 @@
     return true;
   }
 
+  function recordPool(n, w, how) {
+    var ev = root.current;
+    if (ev.bracket && !confirm('The bracket is already seeded from the pool results and will not change. Correct this pool heat anyway?')) return false;
+    commit(function (nx) {
+      var e = nx.current;
+      e.pool = L.setPoolHeat(e.pool, n, w);
+      logEvent(e, w ? 'poolHeat' : 'poolClear', { n: n, w: w, how: how });
+    });
+    return true;
+  }
+
   function setToast(text, undo) {
     clearTimeout(toastTimer);
     ui.toast = { text: text, undo: undo };
@@ -320,7 +417,19 @@
       commit(function (n) { var e = n.current, s = e.scouts.filter(function (x) { return x.id === d.id; })[0]; logEvent(e, 'rename', { id: d.id, from: s.name, to: nm }); s.name = nm; });
     },
     start: function () {
-      var ev = root.current;
+      var ev = root.current, nn = ev.scouts.length;
+      if (effFormat(nn) === 'pool') {
+        var po = poolOpts(nn), est = L.estimateHeats(nn, { swap: ui.swap, format: 'pool', k: po.k, advance: po.adv });
+        if (!confirm('Start pool play with ' + nn + ' scouts (' + po.k + ' heats each, top ' + po.adv + ' advance; about ' + est.poolHeats + ' pool heats)? Scouts can no longer be added or removed after this.')) return;
+        commit(function (n) {
+          var e = n.current;
+          e.format = 'pool';
+          e.pool = L.createPool(e.scouts.map(function (s) { return s.id; }), po.k, po.adv, null, { swap: ui.swap });
+          logEvent(e, 'startPool', { k: po.k, advance: po.adv, swap: ui.swap, heats: e.pool.heats.length });
+        });
+        ui.tab = 'race'; render();
+        return;
+      }
       if (!confirm('Start the bracket with ' + ev.scouts.length + ' scouts' + (ui.swap ? '' : ' (single heat per match, no lane swap)') + '? Scouts can no longer be added or removed after this.')) return;
       commit(function (n) {
         var e = n.current;
@@ -339,7 +448,30 @@
     },
     undo: function () {
       var u = ui.toast && ui.toast.undo; ui.toast = null; clearTimeout(toastTimer);
-      if (u) recordHeat(u.r, u.i, u.k, null, 'undo'); else render();
+      if (u && u.pool != null) recordPool(u.pool, null, 'undo');
+      else if (u) recordHeat(u.r, u.i, u.k, null, 'undo'); else render();
+    },
+    poolWin: function (d) {
+      var n = +d.n;
+      if (recordPool(n, d.w, 'race')) {
+        var ev = root.current, left = L.poolQueue(ev.pool).length;
+        setToast(nameOf(ev, d.w) + ' won' + (left ? ' the heat' : ' — pool play complete!'), { pool: n }); render();
+      }
+    },
+    poolSet: function (d) { recordPool(+d.n, d.w, 'edit'); },
+    poolClear: function (d) { recordPool(+d.n, null, 'edit'); },
+    togglePoolEdit: function () { ui.poolEdit = !ui.poolEdit; render(); },
+    startBracket: function () {
+      var ev = root.current, pool = ev.pool;
+      if (!L.poolDone(pool)) return;
+      var seeds = L.poolSeeds(pool);
+      if (!confirm('Start the bracket with the top ' + seeds.length + ' scouts? Pool results can still be corrected later, but the bracket seeding will not change.')) return;
+      commit(function (n) {
+        var e = n.current;
+        e.bracket = L.createBracket(seeds, null, { swap: pool.swap, ordered: true });
+        logEvent(e, 'startBracket', { seeds: e.bracket.seeds, swap: pool.swap });
+      });
+      ui.tab = 'race'; render();
     },
     sheet: function (d) { ui.sheet = { r: +d.r, i: +d.i }; render(); },
     closeSheet: function () { ui.sheet = null; render(); },
@@ -354,12 +486,16 @@
       (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(function () { alert('Copied.'); }, function () { alert('Copy failed. Use the export file instead.'); });
     },
     summary: function () {
-      var ev = root.current, res = L.resolve(ev.bracket), total = res.length, t = ev.title + '\n';
+      var ev = root.current, t = ev.title + '\n', res = ev.bracket ? L.resolve(ev.bracket) : [], total = res.length;
+      if (ev.pool) {
+        t += '\nPool play (top ' + ev.pool.advance + ' advance)\n';
+        L.poolStandings(ev.pool).forEach(function (r) { t += '  ' + r.rank + '. ' + nameOf(ev, r.id) + ' ' + r.w + '–' + r.l + '\n'; });
+      }
       res.forEach(function (ms) { t += '\n' + L.roundName(ms[0].r, total) + '\n'; ms.forEach(function (m) {
         if (m.bye) { t += '  ' + nameOf(ev, m.winner) + ' (bye)\n'; return; }
         t += '  ' + (nameOf(ev, m.a) || 'TBD') + ' vs ' + (nameOf(ev, m.b) || 'TBD') + (m.winner ? ' → ' + nameOf(ev, m.winner) : '') + '\n';
       }); });
-      var c = L.champion(res); if (c) t += '\nChampion: ' + nameOf(ev, c) + '\n';
+      var c = ev.bracket && L.champion(res); if (c) t += '\nChampion: ' + nameOf(ev, c) + '\n';
       (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(function () { alert('Copied.'); }, function () { alert(t); });
     },
     import: function () { $('#file').click(); },
@@ -430,23 +566,27 @@
   });
   document.addEventListener('change', function (e) {
     if (e.target.id === 'file' && e.target.files[0]) { importFile(e.target.files[0]); e.target.value = ''; }
-    else if (e.target.id === 'swap') {
-      ui.swap = e.target.checked;
-      try { localStorage.setItem('rgr:v1:swap', ui.swap ? '1' : '0'); } catch (x) {}
-      render();
-    }
+    else if (e.target.id === 'swap') { ui.swap = e.target.checked; saveOpts(); render(); }
+    else if (e.target.name === 'fmt') { ui.format = e.target.value; saveOpts(); render(); }
+    else if (e.target.id === 'k') { ui.k = +e.target.value; saveOpts(); render(); }
+    else if (e.target.id === 'adv') { ui.adv = +e.target.value; saveOpts(); render(); }
   });
   window.addEventListener('pagehide', persist);
   document.addEventListener('visibilitychange', function () { if (document.hidden) persist(); });
 
   // ---------- Boot ----------
-  try { ui.draft = localStorage.getItem('rgr:v1:draft') || ''; ui.swap = localStorage.getItem('rgr:v1:swap') !== '0'; } catch (e) {}
+  try {
+    ui.draft = localStorage.getItem('rgr:v1:draft') || '';
+    ui.swap = localStorage.getItem('rgr:v1:swap') !== '0';
+    var o = JSON.parse(localStorage.getItem('rgr:v1:opts') || 'null');
+    if (o) { ui.swap = o.swap !== false; ui.format = o.format === 'pool' ? 'pool' : 'bracket'; ui.k = o.k || 3; ui.adv = o.adv || null; }
+  } catch (e) {}
   render();
   reconcileFromIdb();
   if (navigator.storage && navigator.storage.persist) {
     navigator.storage.persist().then(function (p) { saveInfo.persisted = p; }).catch(function () {});
   }
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+    window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(function () {}); });
   }
 })();
