@@ -2,9 +2,9 @@
 const L = require('./logic.js');
 const assert = require('assert');
 
-function sim(n, seedRng) {
+function sim(n, seedRng, opts) {
   const scouts = Array.from({ length: n }, (_, i) => ({ id: 's' + i, name: 'S' + i }));
-  let br = L.createBracket(scouts.map(s => s.id), seedRng);
+  let br = L.createBracket(scouts.map(s => s.id), seedRng, opts);
   let guard = 0;
   for (;;) {
     const res = L.resolve(br);
@@ -21,14 +21,18 @@ function sim(n, seedRng) {
   const champ = L.champion(res);
   assert(champ, 'champion exists for n=' + n);
   const st = L.stats({ scouts, bracket: br });
+  const heats = Object.values(st).reduce((a, x) => a + x.hw, 0);
+  const est = L.estimateHeats(n, opts);
+  assert(heats >= est.min && heats <= est.max, `n=${n} heats ${heats} outside ${est.min}-${est.max}`);
   scouts.forEach(sc => {
     const x = st[sc.id];
+    if (opts && opts.swap === false) return;
     assert(x.lane1 >= 1 && x.lane2 >= 1, `n=${n} ${sc.id} must race both lanes: ${JSON.stringify(x)}`);
   });
   assert.strictEqual(Object.values(st).filter(x => x.status === 'Champion').length, 1);
   return br;
 }
-for (let n = 2; n <= 40; n++) for (let t = 0; t < 30; t++) sim(n);
+for (let n = 2; n <= 40; n++) for (let t = 0; t < 30; t++) { sim(n); sim(n, null, { swap: false }); }
 
 // No double byes in round 0
 for (let n = 2; n <= 40; n++) {
@@ -67,5 +71,24 @@ for (let n = 2; n <= 40; n++) {
   assert(!m.winner && m.heats[2].needed);
   br = L.setHeat(br, 0, 0, 2, m.b);
   assert.strictEqual(L.resolve(br)[0][0].winner, m.b);
+}
+// No-swap: one heat decides each match, no tiebreaker
+{
+  let br = L.createBracket(['a', 'b', 'c', 'd'], () => 0.1, { swap: false });
+  assert.strictEqual(L.queue(L.resolve(br)).length, 2);
+  let m = L.resolve(br)[0][0];
+  br = L.setHeat(br, 0, 0, 0, m.b);
+  assert.strictEqual(L.resolve(br)[0][0].winner, m.b);
+  assert(!L.resolve(br)[0][0].heats[1].needed);
+}
+// Legacy brackets (no swap flag) behave as swap-on
+{
+  const br = L.createBracket(['a', 'b'], () => 0.1); delete br.swap;
+  assert.strictEqual(L.queue(L.resolve(br)).length, 2);
+}
+// Estimates
+{
+  const e = L.estimateHeats(8); assert.deepStrictEqual([e.min, e.typLow, e.typHigh, e.max], [14, 16, 17, 21]);
+  const f = L.estimateHeats(8, { swap: false }); assert.deepStrictEqual([f.min, f.max], [7, 7]);
 }
 console.log('all tests passed');

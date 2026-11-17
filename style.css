@@ -101,3 +101,6 @@ td.n, th.n { text-align: center; }
   border-radius: 12px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; max-width: 600px; margin: 0 auto; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
 .toast button { background: #fff; color: #14202e; border: 0; border-radius: 8px; padding: 8px 14px; font-weight: 800; }
 .banner { background: var(--bad); color: #fff; padding: 10px 16px; font-weight: 700; }
+
+.check { display: flex; align-items: center; gap: 10px; font-size: 16px; min-height: 44px; }
+.check input { width: 22px; height: 22px; flex: none; }

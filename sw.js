@@ -1,5 +1,5 @@
 // Offline cache. Bump VERSION when shipping changes so installed copies refresh.
-const VERSION = 'rgr-v1';
+const VERSION = 'rgr-v2';
 const ASSETS = ['./', 'index.html', 'style.css', 'logic.js', 'app.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 

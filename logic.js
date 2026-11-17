@@ -32,7 +32,9 @@
     return a;
   }
 
-  function createBracket(scoutIds, rng) {
+  // opts.swap (default true): each match is two lane-swapped heats (+ tiebreaker).
+  // swap === false: each match is a single heat.
+  function createBracket(scoutIds, rng, opts) {
     if (scoutIds.length < 2) throw new Error('Need at least 2 scouts');
     var size = 2;
     while (size < scoutIds.length) size *= 2;
@@ -47,7 +49,7 @@
       }
       rounds.push(ms);
     }
-    return { seeds: seeds, rounds: rounds };
+    return { seeds: seeds, rounds: rounds, swap: !(opts && opts.swap === false) };
   }
 
   function roundName(r, totalRounds) {
@@ -58,9 +60,21 @@
     return 'Round ' + (r + 1);
   }
 
+  function swapOn(br) { return br.swap !== false; } // older saved brackets have no flag = swap on
+
+  // Estimated heats for a setup. n scouts, opts.swap (default true).
+  // Returns { matches, min, typLow, typHigh, max, perScoutMin }.
+  function estimateHeats(n, opts) {
+    var swap = !(opts && opts.swap === false);
+    var matches = Math.max(0, n - 1);
+    if (!swap) return { matches: matches, min: matches, typLow: matches, typHigh: matches, max: matches, perScoutMin: n >= 2 ? 1 : 0 };
+    return { matches: matches, min: 2 * matches, typLow: Math.ceil(2 * matches + 0.25 * matches),
+      typHigh: Math.floor(2 * matches + 0.5 * matches), max: 3 * matches, perScoutMin: n >= 2 ? 2 : 0 };
+  }
+
   // Derive everything from seeds + recorded heats.
   function resolve(br) {
-    var out = [];
+    var out = [], swap = swapOn(br);
     br.rounds.forEach(function (ms, r) {
       out[r] = ms.map(function (m, i) {
         var a, b;
@@ -78,7 +92,14 @@
           res.heats.push({ k: k, laneA: lanes[k], laneB: lanes[k] === 1 ? 2 : 1, w: w, needed: false, stale: !!(rec && !w) });
         }
         if (!res.ready) return res;
-        res.heats[0].needed = true; res.heats[1].needed = true;
+        res.heats[0].needed = true;
+        if (!swap) {
+          if (res.heats[0].w) res.winner = res.heats[0].w;
+          res.done = !!res.winner;
+          res.score = { a: res.heats[0].w === a ? 1 : 0, b: res.heats[0].w === b ? 1 : 0 };
+          return res;
+        }
+        res.heats[1].needed = true;
         var wa = 0, wb = 0;
         [0, 1].forEach(function (k) {
           if (res.heats[k].w === a) wa++; else if (res.heats[k].w === b) wb++;
@@ -164,7 +185,7 @@
   }
 
   var api = { seedOrder: seedOrder, createBracket: createBracket, resolve: resolve, queue: queue,
-    champion: champion, setHeat: setHeat, impact: impact, stats: stats, roundName: roundName, shuffle: shuffle };
+    champion: champion, estimateHeats: estimateHeats, swapOn: swapOn, setHeat: setHeat, impact: impact, stats: stats, roundName: roundName, shuffle: shuffle };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.RGR = api;
 })(typeof self !== 'undefined' ? self : this);

@@ -81,7 +81,7 @@
   function laneChip(n) { return '<span class="lane l' + n + '">Lane ' + n + '</span>'; }
   function logEvent(ev, type, data) { ev.log.push(Object.assign({ t: Date.now(), type: type }, data || {})); }
 
-  var ui = { tab: 'race', sheet: null, toast: null, draft: '', title: '' };
+  var ui = { tab: 'race', sheet: null, toast: null, draft: '', title: '', swap: true };
   var toastTimer = null;
 
   // ---------- Render ----------
@@ -133,10 +133,23 @@
       }).join('') + '</ul>';
     }
     h += '</div>';
-    h += '<div class="card"><h2>How it works</h2><p class="small muted" style="margin:0">Single-elimination bracket. Each match is <b>two heats with lanes swapped</b>, so every scout races both lanes every match. Most heat wins advances; a 1–1 split gets a tiebreaker heat. Scouts without a partner in round 1 get a bye and still race both lanes in round 2.</p></div>';
+    h += '<div class="card"><h2>Format</h2>' +
+      '<label class="check"><input type="checkbox" id="swap" ' + (ui.swap ? 'checked' : '') + '> <span>Swap lanes (two heats per match)</span></label>' +
+      '<p class="small muted" style="margin:6px 0 0">' + (ui.swap
+        ? 'Single elimination. Each match is <b>two heats with lanes swapped</b>, so every scout races both lanes every match. Most heat wins advances; a 1–1 split gets a tiebreaker heat. Scouts without a partner in round 1 get a bye and still race both lanes in round 2.'
+        : 'Single elimination. Each match is <b>one heat</b>; the winner advances. Scouts are <b>not</b> guaranteed to race both lanes, and nobody is guaranteed more than one heat.') + '</p>' +
+      estimateHtml(scouts.length) + '</div>';
     h += '<button class="btn primary block" data-act="start" ' + (scouts.length < 2 ? 'disabled' : '') + '>Start bracket with ' + scouts.length + ' scouts</button>';
     if (scouts.length < 2) h += '<p class="hint muted small">Add at least 2 scouts.</p>';
     return h;
+  }
+
+  function estimateHtml(n) {
+    if (n < 2) return '<p class="small" style="margin:8px 0 0"><b>Heats:</b> add at least 2 scouts to see an estimate.</p>';
+    var e = L.estimateHeats(n, { swap: ui.swap }), t;
+    if (!ui.swap) t = '<b>' + e.min + '</b> heats total (' + e.matches + ' matches × 1 heat)';
+    else t = '<b>' + e.typLow + '–' + e.typHigh + '</b> heats typical (' + e.min + ' minimum, ' + e.max + ' if every match needs a tiebreaker)';
+    return '<p class="small" style="margin:8px 0 0"><b>Heats:</b> ' + t + '. Every scout races at least ' + e.perScoutMin + ' heat' + (e.perScoutMin === 1 ? '' : 's') + '.</p>';
   }
 
   // --- Race ---
@@ -150,7 +163,7 @@
       var n = q[0], m = res[n.r][n.i], ht = m.heats[n.k];
       var left = ht.laneA === 1 ? m.a : m.b, right = ht.laneA === 1 ? m.b : m.a;
       h += '<div class="card"><div class="next-label"><div><b>' + L.roundName(n.r, total) + '</b> · Match ' + (n.i + 1) + '</div>' +
-        (n.k === 2 ? '<span class="chip tb">Tiebreaker</span>' : '<span class="chip">Heat ' + (n.k + 1) + ' of 2</span>') + '</div>';
+        (n.k === 2 ? '<span class="chip tb">Tiebreaker</span>' : L.swapOn(ev.bracket) ? '<span class="chip">Heat ' + (n.k + 1) + ' of 2</span>' : '<span class="chip">Single heat</span>') + '</div>';
       h += '<div class="vs">' + [left, right].map(function (id, idx) {
         return '<button class="pick l' + (idx + 1) + '" data-act="win" data-r="' + n.r + '" data-i="' + n.i + '" data-k="' + n.k + '" data-w="' + id + '">' +
           '<small class="lane l' + (idx + 1) + '">Lane ' + (idx + 1) + '</small>' + esc(nameOf(ev, id)) + '</button>';
@@ -237,6 +250,7 @@
     }
     h += '</div>';
     h += '<p class="muted small" style="text-align:center">Nothing is ever deleted: corrected results are kept in each event’s history log.</p>';
+    h += '<p class="small" style="text-align:center"><a href="https://github.com/mstratman/raingutter/" target="_blank" rel="noopener">Source code &amp; issues on GitHub</a></p>';
     return h;
   }
 
@@ -307,11 +321,11 @@
     },
     start: function () {
       var ev = root.current;
-      if (!confirm('Start the bracket with ' + ev.scouts.length + ' scouts? Scouts can no longer be added or removed after this.')) return;
+      if (!confirm('Start the bracket with ' + ev.scouts.length + ' scouts' + (ui.swap ? '' : ' (single heat per match, no lane swap)') + '? Scouts can no longer be added or removed after this.')) return;
       commit(function (n) {
         var e = n.current;
-        e.bracket = L.createBracket(e.scouts.map(function (s) { return s.id; }));
-        logEvent(e, 'start', { seeds: e.bracket.seeds });
+        e.bracket = L.createBracket(e.scouts.map(function (s) { return s.id; }), null, { swap: ui.swap });
+        logEvent(e, 'start', { seeds: e.bracket.seeds, swap: ui.swap });
       });
       ui.tab = 'race'; render();
     },
@@ -416,12 +430,17 @@
   });
   document.addEventListener('change', function (e) {
     if (e.target.id === 'file' && e.target.files[0]) { importFile(e.target.files[0]); e.target.value = ''; }
+    else if (e.target.id === 'swap') {
+      ui.swap = e.target.checked;
+      try { localStorage.setItem('rgr:v1:swap', ui.swap ? '1' : '0'); } catch (x) {}
+      render();
+    }
   });
   window.addEventListener('pagehide', persist);
   document.addEventListener('visibilitychange', function () { if (document.hidden) persist(); });
 
   // ---------- Boot ----------
-  try { ui.draft = localStorage.getItem('rgr:v1:draft') || ''; } catch (e) {}
+  try { ui.draft = localStorage.getItem('rgr:v1:draft') || ''; ui.swap = localStorage.getItem('rgr:v1:swap') !== '0'; } catch (e) {}
   render();
   reconcileFromIdb();
   if (navigator.storage && navigator.storage.persist) {
